@@ -12,13 +12,14 @@ use super::logger::LOG;
 #[derive(Debug)]
 pub struct XMLNode {
 	name: String,
+	data: String,
 	attribs: HashMap<String, Vec<String>>,
 	childs: Vec<XMLNode>
 }
 
 impl XMLNode {
 	fn new() -> XMLNode {
-		return XMLNode { name: String::new(), attribs: HashMap::new(), childs: Vec::new() }
+		return XMLNode { name: String::new(), data: String::new(), attribs: HashMap::new(), childs: Vec::new() }
 	}
 
 	pub fn read_from(xml_parser: &mut EventReader<BufReader<&TcpStream>>) -> XMLNode {
@@ -50,8 +51,11 @@ impl XMLNode {
 						node.childs.push(child);
 						node_stack.push_back(node);
 					} else if has_received_first {
-						final_node = Some(node_stack.pop_back().expect("Unexpectedly found empty XML node stack while trying to return node."));
+						final_node = Some(node_stack.pop_back().expect("Unexpectedly found empty XML node stack while trying to return node"));
 					}
+				},
+				Ok(XmlEvent::Characters(content)) => {
+					node_stack.back_mut().expect("Unexpectedly found empty XML node stack while trying to add characters").data += content.as_str();
 				},
 				Err(e) => {
 					LOG.error(|| format!("XMLNode error: {}", e));
@@ -115,7 +119,7 @@ impl XMLNode {
 		LOG.deep_trace(|| format!("Parsing {:?} to Card", self));
 		let err = "Error while parsing XML node to Card";
 		return Card {
-			card_type: self.get_attribute("type").expect(err).to_string()
+			card_type: self.get_child("type").expect(err).data.to_string()
 		};
 	}
 
@@ -178,6 +182,7 @@ impl Clone for XMLNode {
 	fn clone(&self) -> Self {
 		return XMLNode {
 			name: self.name.clone(),
+			data: self.data.clone(),
 			attribs: self.attribs.clone(),
 			childs: self.childs.clone()
 		};

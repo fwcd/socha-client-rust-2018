@@ -16,7 +16,7 @@ pub struct XMLClient {
 impl XMLClient {
 	pub fn new() -> XMLClient {
 		return XMLClient {
-			listeners: Vec::new(),
+			listeners: vec![Box::new(SimpleClientListener)],
 			my_color: None,
 			game_state: None,
 			room: None
@@ -154,3 +154,7 @@ pub trait ClientListener {
 
 	fn on_join(&mut self, room: &Room) {}
 }
+
+struct SimpleClientListener;
+
+impl ClientListener for SimpleClientListener {}

@@ -13,7 +13,7 @@ pub struct Logger {
 
 impl Logger {
 	fn log<F>(&self, prefix: &str, msg: F, level: i32) where F: Fn() -> String {
-		if level <= self.level {
+		if self.level <= level {
 			println!("{}{}", prefix, msg());
 		}
 	}
