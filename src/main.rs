@@ -2,6 +2,7 @@ mod arg_parser;
 mod game;
 mod xml_client;
 mod xml_utils;
+mod logger;
 
 use arg_parser::ArgParser;
 use xml_client::XMLClient;

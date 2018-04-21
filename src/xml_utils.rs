@@ -7,6 +7,7 @@ use std::io::BufReader;
 use std::net::TcpStream;
 use self::xml::reader::{EventReader, XmlEvent};
 use super::game::*;
+use super::logger::LOG;
 
 #[derive(Debug)]
 pub struct XMLNode {
@@ -22,13 +23,14 @@ impl XMLNode {
 
 	pub fn read_from(xml_parser: &mut EventReader<BufReader<&TcpStream>>) -> XMLNode {
 		let mut node_stack: VecDeque<XMLNode> = VecDeque::new();
-		node_stack.push_back(XMLNode::new());
+		let mut has_received_first = false;
+		let mut final_node: Option<XMLNode> = None;
 
 		loop {
 			match xml_parser.next() {
 				Ok(XmlEvent::StartElement { name, attributes, .. }) => {
-					println!("Received {} with {:?}", name, attributes); // DEBUG
-					let mut node = node_stack.pop_back().expect("Unexpectedly found empty XML node stack after receiving new start element.");
+					LOG.trace(|| format!("Starting XML element {} with {:?}", name, attributes));
+					let mut node = XMLNode::new();
 					node.name = name.local_name;
 					for attribute in attributes {
 						let attrib_name = attribute.name.local_name;
@@ -38,27 +40,32 @@ impl XMLNode {
 						node.attribs.get_mut(&attrib_name).unwrap().push(attribute.value.to_string());
 					}
 					node_stack.push_back(node);
+					has_received_first = true;
 				},
-				Ok(XmlEvent::EndElement { .. }) => {
+				Ok(XmlEvent::EndElement { name, .. }) => {
+					LOG.deep_trace(|| format!("Ending XML element {}", name));
 					if node_stack.len() > 2 {
 						let child = node_stack.pop_back().expect("Unexpectedly found empty XML node stack while trying to pop off new child element");
 						let mut node = node_stack.pop_back().expect("Unexpectedly found empty XML node stack while trying to hook up new child element");
 						node.childs.push(child);
 						node_stack.push_back(node);
+					} else if has_received_first {
+						final_node = Some(node_stack.pop_back().expect("Unexpectedly found empty XML node stack while trying to return node."));
 					}
 				},
 				Err(e) => {
-					println!("XMLNode error: {}", e);
+					LOG.error(|| format!("XMLNode error: {}", e));
 					break;
 				},
 				_ => {}
 			}
 
-			// Condition
-			if node_stack.len() <= 1 { break; }
+			LOG.deep_trace(|| format!("Node stack is at {}", node_stack.len()));
+			// Exit condition
+			if final_node.is_some() { break; }
 		}
 
-		return node_stack.pop_back().expect("Unexpectedly found empty XML node stack while trying to return nodes.");
+		return final_node.unwrap(); // Is guaranteed to be present due to the condition above
 	}
 
 	pub fn as_game_state(&self) -> GameState {
@@ -97,6 +104,7 @@ impl XMLNode {
 	}
 
 	pub fn as_welcome_message(&self) -> WelcomeMessage {
+		LOG.deep_trace(|| format!("Parsing {:?} to WelcomeMessage", self));
 		let err = "Error while parsing XML node to WelcomeMessage";
 		return WelcomeMessage {
 			color: self.get_attribute("color").expect(err).to_string()
@@ -104,6 +112,7 @@ impl XMLNode {
 	}
 
 	pub fn as_card(&self) -> Card {
+		LOG.deep_trace(|| format!("Parsing {:?} to Card", self));
 		let err = "Error while parsing XML node to Card";
 		return Card {
 			card_type: self.get_attribute("type").expect(err).to_string()
@@ -111,13 +120,14 @@ impl XMLNode {
 	}
 
 	pub fn as_board(&self) -> Board {
+		LOG.deep_trace(|| format!("Parsing {:?} to Board", self));
 		return Board {
 			fields: self.get_child_vec("fields").iter().map(|n| n.as_field()).collect()
 		};
 	}
 
 	pub fn as_memento(&self) -> Memento {
-		println!("Memento: {:?}", self); // DEBUG
+		LOG.deep_trace(|| format!("Parsing {:?} to Memento", self));
 		let err = "Error while parsing XML node to Memento";
 		return Memento {
 			state: self.get_child("state").expect(err).as_game_state()
@@ -125,6 +135,7 @@ impl XMLNode {
 	}
 
 	pub fn as_field(&self) -> Field {
+		LOG.deep_trace(|| format!("Parsing {:?} to Field", self));
 		let err = "Error while parsing XML node to Field";
 		return Field {
 			field_type: self.get_attribute("type").expect(err).to_string(),
