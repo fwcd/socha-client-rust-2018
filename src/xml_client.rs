@@ -16,11 +16,15 @@ pub struct XMLClient {
 impl XMLClient {
 	pub fn new() -> XMLClient {
 		return XMLClient {
-			listeners: vec![Box::new(SimpleClientListener)],
+			listeners: Vec::new(),
 			my_color: None,
 			game_state: None,
 			room: None
 		};
+	}
+
+	pub fn add_listener(&mut self, listener: Box<ClientListener>) {
+		self.listeners.push(listener);
 	}
 
 	/**
@@ -68,7 +72,15 @@ impl XMLClient {
 						"welcomeMessage" => self.handle_welcome_message_node(&mut node),
 						"sc.framework.plugins.protocol.MoveRequest" => {
 							let color = self.my_color.iter().clone().last().expect("Could not find player color.").as_str();
-							let mut move_req_listener = &mut *self.listeners[0];
+							let mut default_listener = SimpleClientListener;
+							let mut move_req_listener: &mut ClientListener;
+
+							if self.listeners.len() == 0 {
+								move_req_listener = &mut default_listener;
+							} else {
+								move_req_listener = &mut *self.listeners[0];
+							}
+
 							let game_state = &self.game_state.iter().clone().last().expect("Could not find current game state.");
 							let xml_move = XMLClient::get_move_upon_request(color, move_req_listener, game_state, &mut node).xml_move;
 							XMLClient::write_to(stream, &format!("<room roomId=\"%s\"><data class=\"move\">{}</data></room>", xml_move));
@@ -155,6 +167,6 @@ pub trait ClientListener {
 	fn on_join(&mut self, room: &Room) {}
 }
 
-struct SimpleClientListener;
+pub struct SimpleClientListener;
 
 impl ClientListener for SimpleClientListener {}
